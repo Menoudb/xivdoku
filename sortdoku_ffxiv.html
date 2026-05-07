@@ -99,6 +99,17 @@ input{caret-color:transparent}
   display: none !important;
 }
 
+
+/* Évite les doubles infobulles sur les actions déjà validées dans la grille.
+   Les infobulles du menu de fin restent actives. */
+.grid-cell .action-icon-tooltip,
+.cell .action-icon-tooltip,
+.validated-action .action-icon-tooltip,
+.filled-action .action-icon-tooltip,
+.found-action .action-icon-tooltip {
+  display: none !important;
+}
+
 @media(max-width:700px){.modal-grid{grid-template-columns:1fr}}
 @media(max-width:700px){body{padding:12px}header{flex-direction:column}h1{font-size:30px}.spell-list{columns:1}}
 </style>
@@ -390,19 +401,30 @@ function bindActionTooltipEvents(root = document) {
 }
 
 function wordCount(name) {
-  return normalize(name).split(/[\s-]+/).filter(Boolean).length;
+  const withoutRomanSuffix = String(name || "")
+    .trim()
+    .replace(/\s+\b[IVXLCDM]+\b$/i, "");
+
+  return withoutRomanSuffix
+    .split(/\s+/)
+    .filter(Boolean)
+    .length;
+}
+
+
+function stripAccents(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
 function hasDoubleLetter(name) {
-  // Ignore les suffixes de rang en chiffres romains.
-  // Exemples :
-  // - "Malfaisance II" ne doit pas valider "lettre double" à cause de "II"
-  // - "Atout III" ne doit pas valider "lettre double" à cause de "III"
-  const cleaned = String(name || "")
-    .replace(/\b[IVXLCDM]+\b/gi, "")
-    .trim();
+  const normalized = stripAccents(name)
+    .toLowerCase()
+    .replace(/\b[ivxlcdm]+\b/g, "")
+    .replace(/[^a-z]/g, "");
 
-  return /([a-zàâäéèêëîïôöùûüçœ])\1/i.test(cleaned);
+  return /(.)\1/.test(normalized);
 }
 
 function getPower(action) {
