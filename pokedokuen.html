@@ -67,7 +67,17 @@ function effectiveTypes(p){
  if(!h)return (p.types||[]).map(typeKey);
  return selectedGens.has(h.gen) ? h.new : h.old;
 }
-function typeKey(t){return String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace('electric','electric').replace('électrik','electric').replace('electrik','electric').replace('psy','psychic').replace('vol','flying').replace('eau','water').replace('feu','fire').replace('plante','grass').replace('glace','ice').replace('combat','fighting').replace('sol','ground').replace('insecte','bug').replace('roche','rock').replace('spectre','ghost').replace('tenebres','dark').replace('acier','steel').replace('fee','fairy');}
+function typeKey(t){
+ const s=String(t||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+ const map={
+  normal:'normal',fire:'fire',feu:'fire',water:'water',eau:'water',electric:'electric',electrik:'electric',
+  grass:'grass',plante:'grass',ice:'ice',glace:'ice',fighting:'fighting',combat:'fighting',poison:'poison',
+  ground:'ground',sol:'ground',flying:'flying',vol:'flying',psychic:'psychic',psy:'psychic',bug:'bug',
+  insecte:'bug',rock:'rock',roche:'rock',ghost:'ghost',spectre:'ghost',dragon:'dragon',dark:'dark',
+  tenebres:'dark',steel:'steel',acier:'steel',fairy:'fairy',fee:'fairy'
+ };
+ return map[s]||s;
+}
 function typeLabelFromKeys(keys){
  const labelsFr={normal:'Normal',fire:'Feu',water:'Eau',electric:'Électrik',grass:'Plante',ice:'Glace',fighting:'Combat',poison:'Poison',ground:'Sol',flying:'Vol',psychic:'Psy',bug:'Insecte',rock:'Roche',ghost:'Spectre',dragon:'Dragon',dark:'Ténèbres',steel:'Acier',fairy:'Fée'};
  const labelsEn={normal:'Normal',fire:'Fire',water:'Water',electric:'Electric',grass:'Grass',ice:'Ice',fighting:'Fighting',poison:'Poison',ground:'Ground',flying:'Flying',psychic:'Psychic',bug:'Bug',rock:'Rock',ghost:'Ghost',dragon:'Dragon',dark:'Dark',steel:'Steel',fairy:'Fairy'};
