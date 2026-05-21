@@ -554,8 +554,7 @@ function setToken(t){ localStorage.setItem(TOKEN_KEY, t); }
 function clearToken(){ localStorage.removeItem(TOKEN_KEY); }
 
 function authHeaders(){
-  const t = getToken();
-  return t ? {'Content-Type':'application/json','Authorization':'Bearer '+t} : {'Content-Type':'application/json'};
+  return {'Content-Type':'application/json'}; // token envoyé dans le body
 }
 
 // ── Session anonyme pour les votes ──────────────────────────────
@@ -596,9 +595,8 @@ async function checkDiscordSession(){
   const token = getToken();
   if(!token){ discordUser=null; renderUserBadge(); return null; }
   try {
-    const resp = await fetch(API_URL+'/daily_grid.php', {
-      headers: {'Authorization':'Bearer '+token}
-    });
+    const url = API_URL+'/daily_grid.php?token='+encodeURIComponent(token);
+    const resp = await fetch(url);
     const json = await resp.json();
     if(json.ok && json.data.user){
       discordUser  = json.data.user;
@@ -791,10 +789,11 @@ async function sendVote(catRow, catCol, pokemonId){
 async function saveCompAnswer(cellIndex, pokemonId, cellScore, errors, completed){
   if(!discordUser || !competitiveMode) return;
   try {
+    const _tok = getToken();
     await fetch(API_URL+'/save_answer.php', {
       method:'POST',
-      headers: authHeaders(),
-      body:JSON.stringify({cell_index:cellIndex, pokemon_id:String(pokemonId), cell_score:cellScore, errors:errors, completed:completed})
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({token:_tok, cell_index:cellIndex, pokemon_id:String(pokemonId), cell_score:cellScore, errors:errors, completed:completed})
     });
   } catch(e){}
 }
@@ -875,7 +874,9 @@ async function loadLeaderboard(alltime=false){
   content.innerHTML='<p style="color:#64748b;text-align:center;padding:20px">Chargement...</p>';
   try {
     const url=API_URL+'/leaderboard.php'+(alltime?'?alltime=1':'');
-    const resp=await fetch(url,{headers:{'Authorization':'Bearer '+(getToken()||'')}});
+    const _ltok=getToken();
+    const sep=url.includes('?')?'&':'?';
+    const resp=await fetch(_ltok?url+sep+'token='+encodeURIComponent(_ltok):url);
     const json=await resp.json();
     if(!json.ok) throw new Error();
     const rankings=json.data.rankings;
