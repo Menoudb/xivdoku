@@ -680,17 +680,21 @@ function hideDiscordModal(){
 // ── Bouton compétitif ────────────────────────────────────────────
 const compBtn = document.getElementById('compBtn');
 if(compBtn){
-  compBtn.textContent = TXT.competitive_off || '🏆 Compétitif';
+  compBtn.textContent = TXT.competitive_off || '🏆 Grille du jour';
   compBtn.onclick = async () => {
     if(!competitiveMode){
       // Activer le mode compétitif
       if(!discordUser){
-        showDiscordModal();
-        return;
+        // Recheck session before showing modal
+        const data = await checkDiscordSession();
+        if(!data || !data.user){
+          showDiscordModal();
+          return;
+        }
       }
       competitiveMode = true;
       compBtn.classList.add('active');
-      compBtn.textContent = TXT.competitive_on || '🏆 Compétitif ON';
+      compBtn.textContent = TXT.competitive_on || '🏆 Grille du jour ON';
       // Masquer seed + options
       const seedEl = document.querySelector('.seedNote');
       if(seedEl) seedEl.style.display='none';
@@ -705,7 +709,7 @@ if(compBtn){
       // Désactiver
       competitiveMode = false;
       compBtn.classList.remove('active');
-      compBtn.textContent = TXT.competitive_off || '🏆 Compétitif';
+      compBtn.textContent = TXT.competitive_off || '🏆 Grille du jour';
       const seedEl = document.querySelector('.seedNote');
       if(seedEl) seedEl.style.display='';
       const optBtn = document.getElementById('optionToggle');
