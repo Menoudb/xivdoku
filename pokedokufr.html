@@ -532,6 +532,12 @@ function addError(){
  if(pill){pill.classList.remove('shake'); void pill.offsetWidth; pill.classList.add('shake');}
  if(!unlimitedErrors&&errors>=3){
    toast('fr'==='fr'?'3 erreurs. La grille est terminée.':'3 errors. Puzzle over.');
+   // Appliquer l'état perdu immédiatement (contours rouges)
+   if(competitiveMode){
+     savedScore = savedScore || {};
+     savedScore.errors = 3;
+     applyEndGameState();
+   }
    setTimeout(()=>{fetchAllStats().then(()=>{document.querySelectorAll('.cell').forEach((cel,ci)=>{const pid=solved.get(ci);if(pid!==undefined)renderCellStats(cel,ci,pid);});if(competitiveMode && discordUser){  const tok=getToken();  fetch(API_URL+'/save_answer.php',{method:'POST',headers:{'Content-Type':'application/json'},    body:JSON.stringify({token:tok,cell_index:-1,pokemon_id:'__lost__',cell_score:null,errors:errors,cells_solved:solved.size,completed:false,game_over:true})});}renderCompScore('compScoreLose'); showLose();});},150);
  }
 }
