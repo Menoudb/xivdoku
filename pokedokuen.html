@@ -206,7 +206,7 @@ function mulberry32(a){return function(){let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>1
 function encodeSharedSeed(){let genMask=0; selectedGens.forEach(g=>{genMask|=(1<<(g-1));});const optBits=genMask|(abilityCategoriesEnabled?1<<9:0)|(unlimitedErrors?1<<10:0);return optBits*1000000000+currentSeed;}function decodeSharedSeed(shared){const s=Math.floor(Math.abs(shared));const seedRaw=s%1000000000;const optBits=Math.floor(s/1000000000);const genMask=optBits&511;const gens=new Set(); for(let g=1;g<=9;g++){if(genMask&(1<<(g-1)))gens.add(g);}const abilOn=!!(optBits&(1<<9));const unlimOn=!!(optBits&(1<<10));return {seedRaw, gens:gens.size?gens:new Set([1,2,3,4,5,6,7,8,9]), abilOn, unlimOn};}function updateSeedDisplay(){const el=document.getElementById('seedDisplay');if(!el)return;const val=String(encodeSharedSeed());const tip=el.querySelector('.copyTip');// preserve the tip span, update only the text node
 let tn=el.firstChild;while(tn&&tn.nodeType!==3)tn=tn.nextSibling;if(tn)tn.nodeValue=val; else el.prepend(document.createTextNode(val));el.onclick=()=>{  navigator.clipboard.writeText(val).then(()=>{    if(tip){tip.textContent=TXT.copied||'Copied!';tip.classList.add('show');}    setTimeout(()=>{if(tip)tip.classList.remove('show');},1000);  }).catch(()=>{});};}
 function buildPuzzle(){if(seedOverride!==null){currentSeed=seedOverride;seedOverride=null;}else{currentSeed=Math.floor(Math.random()*1000000000);}updateSeedDisplay();const r=mulberry32(currentSeed);document.getElementById('winModal')?.classList.remove('open');document.getElementById('loseModal')?.classList.remove('open');document.getElementById('endModal')?.classList.remove('open');const pool=[...CATEGORIES].sort(()=>r()-.5); let best=null;
- for(let attempt=0;attempt<7000;attempt++){const picked=[]; for(const c of pool.sort(()=>r()-.5)){if(picked.length>=6)break; if(picked.some(x=>x.key===c.key))continue; if(picked.some(x=>x.kind===c.kind))continue; const typeOf=k=>{if(k.startsWith('type_'))return k.replace('type_','');if(k.startsWith('dual_'))return k.replace('dual_','');if(k.startsWith('dualpair_'))return k.replace('dualpair_','').split('_');return null;}; const ct=typeOf(c.key); if(ct&&picked.some(x=>{const xt=typeOf(x.key);if(!xt)return false;const ca=Array.isArray(ct)?ct:[ct];const xa=Array.isArray(xt)?xt:[xt];return ca.some(t=>xa.includes(t));}))continue; if(c.key.startsWith('ability_')&&picked.some(x=>x.key===c.key))continue; picked.push(c);} if(picked.length<6)continue;
+ for(let attempt=0;attempt<7000;attempt++){const picked=[]; for(const c of pool.sort(()=>r()-.5)){if(picked.length>=6)break; if(picked.some(x=>x.key===c.key))continue; if(picked.some(x=>x.kind===c.kind))continue; if(competitiveMode&&c.kind==='ability')continue; const typeOf=k=>{if(k.startsWith('type_'))return k.replace('type_','');if(k.startsWith('dual_'))return k.replace('dual_','');if(k.startsWith('dualpair_'))return k.replace('dualpair_','').split('_');return null;}; const ct=typeOf(c.key); if(ct&&picked.some(x=>{const xt=typeOf(x.key);if(!xt)return false;const ca=Array.isArray(ct)?ct:[ct];const xa=Array.isArray(xt)?xt:[xt];return ca.some(t=>xa.includes(t));}))continue; if(c.key.startsWith('ability_')&&picked.some(x=>x.key===c.key))continue; picked.push(c);} if(picked.length<6)continue;
  const chosenFirst=[...picked];
  let forbiddenTypePair=false;
  for(let i=0;i<chosenFirst.length;i++){
@@ -544,6 +544,7 @@ function renderOptions(){
    rebuildFilteredData();
    updateErrors();
    drop.classList.remove('open');
+   saveUserOptions(); // sauvegarder les options
    buildPuzzle();
  };
 }
@@ -634,6 +635,7 @@ async function checkDiscordSession(){
       savedAnswers = json.data.saved || {};
       savedScore   = json.data.current_score || null;
       renderUserBadge();
+      if(!competitiveMode) loadUserOptions(); // restaurer les options
       return json.data;
     } else if(resp.status === 200){
       // HTTP 200 mais user=null: token invalide/expiré -> forcer reconnexion
@@ -742,7 +744,7 @@ const compBtn = document.getElementById('compBtn');
 if(compBtn){
   compBtn.textContent = TXT.competitive_off || 'Grille du jour';
   compBtn.onclick = async () => {
-    if(!discordUser){ window.location.href = LOGIN_URL; return; }
+    if(!discordUser){ window.location.href = LOGIN_URL + '&comp=1'; return; }
     if(!competitiveMode){ enterCompetitiveMode(); }
   };
 }
@@ -837,6 +839,31 @@ function applyEndGameState(){
   // Masquer le bouton Révéler dans le corner
   const revCorner = document.getElementById('revealCorner');
   if(revCorner) revCorner.style.display = 'none';
+  // Afficher le décompte même si perdu/terminé
+  updateCornerScore();
+}
+
+
+// ── Sauvegarde et restauration des options (joueurs authentifiés) ─
+function saveUserOptions(){
+  if(!discordUser || competitiveMode) return; // jamais en mode compétitif
+  const opts = {
+    gens: [...selectedGens],
+    ability: abilityCategoriesEnabled,
+    unlimited: unlimitedErrors
+  };
+  localStorage.setItem('pdoku_options_'+LANG_VAL, JSON.stringify(opts));
+}
+function loadUserOptions(){
+  if(competitiveMode) return;
+  const raw = localStorage.getItem('pdoku_options_'+LANG_VAL);
+  if(!raw) return;
+  try {
+    const opts = JSON.parse(raw);
+    if(opts.gens && opts.gens.length) selectedGens = new Set(opts.gens);
+    if(typeof opts.ability === 'boolean') abilityCategoriesEnabled = opts.ability;
+    if(typeof opts.unlimited === 'boolean') unlimitedErrors = opts.unlimited;
+  } catch(e){}
 }
 
 // ── Vote anonyme ─────────────────────────────────────────────────
@@ -921,7 +948,15 @@ function updateCornerScore(){
     const score=computeCellScore(cellIndex,pokemonId);
     total+=score; count++;
   });
-  if(!count){ return; }
+  if(!count){
+    // Pas de score mais afficher le décompte quand perdu/terminé
+    const cor2=document.querySelector('.corner');
+    if(cor2 && savedScore && (savedScore.errors>=3 || savedScore.completed)){
+      cor2.innerHTML=`<div style="text-align:center;padding:4px"><div style="font-size:11px;color:#ef4444;font-weight:700">${savedScore.completed?'✅':'❌'}</div><div style="font-size:9px;margin-top:3px" id="cornerCountdown"></div></div>`;
+      startCountdown();
+    }
+    return;
+  }
   cor.innerHTML=`<div style="text-align:center;padding:4px"><div style="font-size:20px;font-weight:900;color:#eab308;font-family:'Space Mono',monospace;line-height:1">${total}<span style="font-size:11px;color:var(--muted);font-weight:400">/900</span></div><div style="font-size:9px;margin-top:3px" id="cornerCountdown"></div></div>`;
   startCountdown();
 }
@@ -1066,7 +1101,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
   });
   // Initialisation
-  checkDiscordSession();
+  const _urlP = new URLSearchParams(window.location.search);
+  if(_urlP.get('comp')==='1'){
+    history.replaceState({},'',window.location.pathname);
+    checkDiscordSession().then(data=>{ if(data && data.user) enterCompetitiveMode(); });
+  } else {
+    checkDiscordSession();
+  }
   setInterval(()=>{ if(!discordUser){ const btn=document.getElementById('discordAuthBtn'); if(btn){ btn.style.animation='discordPulse 0.4s ease-in-out 3'; setTimeout(()=>btn.style.animation='',1200); } } }, 20000);
 });
 
