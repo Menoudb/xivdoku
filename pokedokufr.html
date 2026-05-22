@@ -340,7 +340,16 @@ input.addEventListener('keydown',e=>{
     } else { selected=null; }
   } else if(e.key==='Enter'){
     e.preventDefault();
-    const p=selected||POKEMON.find(p=>normalize(p.name)===normalize(input.value));
+    // Si une suggestion est sélectionnée via flèche, l'utiliser
+    let p=selected;
+    if(!p && _sugIdx>=0){
+      const sugs2=sug.querySelectorAll('.sug');
+      if(sugs2[_sugIdx]){
+        const sid=sugs2[_sugIdx].dataset.id;
+        p=byId.get(sid)||byId.get(Number(sid));
+      }
+    }
+    if(!p) p=POKEMON.find(pk=>normalize(pk.name)===normalize(input.value));
     validate(el,i,p);
     _sugIdx=-1;
   }
@@ -517,7 +526,7 @@ function addError(){
  if(pill){pill.classList.remove('shake'); void pill.offsetWidth; pill.classList.add('shake');}
  if(!unlimitedErrors&&errors>=3){
    toast('fr'==='fr'?'3 erreurs. La grille est terminée.':'3 errors. Puzzle over.');
-   setTimeout(()=>{fetchAllStats().then(()=>{document.querySelectorAll('.cell').forEach((cel,ci)=>{const pid=solved.get(ci);if(pid!==undefined)renderCellStats(cel,ci,pid);});renderCompScore('compScoreLose'); showLose();});},150);
+   setTimeout(()=>{fetchAllStats().then(()=>{document.querySelectorAll('.cell').forEach((cel,ci)=>{const pid=solved.get(ci);if(pid!==undefined)renderCellStats(cel,ci,pid);});if(competitiveMode && discordUser){  const tok=getToken();  fetch(API_URL+'/save_answer.php',{method:'POST',headers:{'Content-Type':'application/json'},    body:JSON.stringify({token:tok,cell_index:-1,pokemon_id:'__lost__',cell_score:null,errors:errors,completed:false,game_over:true})});}renderCompScore('compScoreLose'); showLose();});},150);
  }
 }
 function normalize(s){return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
@@ -790,13 +799,26 @@ function restoreSavedAnswers(){
   const cellEls = document.querySelectorAll('.cell');
   Object.entries(savedAnswers).forEach(([ci, ans]) => {
     const idx = parseInt(ci);
+    if(ans.pokemon_id === '__lost__') return; // sentinel de défaite
     const el  = cellEls[idx];
     if(!el || solved.has(idx)) return;
     const p = byId.get(ans.pokemon_id) || byId.get(Number(ans.pokemon_id));
     if(p && cells[idx]?.includes(p.id)) validate(el, idx, p);
   });
   _restoringAnswers = false;
-if(competitiveMode)updateCornerScore();
+  if(competitiveMode) updateCornerScore();
+  // Si la grille était perdue (errors >= 3 en DB), bloquer sans modal
+  if(competitiveMode && savedScore && (savedScore.errors >= 3) && !unlimitedErrors){
+    errors = 3;
+    updateErrors();
+    document.querySelectorAll('.cell').forEach((cel,ci)=>{
+      if(!solved.has(ci)){
+        const inp=cel.querySelector('input');
+        if(inp){ inp.disabled=true; inp.placeholder='Partie terminée'; }
+        cel.style.opacity='0.5';
+      }
+    });
+  }
 }
 
 // ── Vote anonyme ─────────────────────────────────────────────────
