@@ -761,7 +761,11 @@ async function startDailyGrid(){
     if(Object.keys(savedAnswers).length > 0){
       toast(TXT.restoring || 'Restauration de votre partie...');
       restoreSavedAnswers();
-    } else { applyEndGameState(); }
+    } else {
+      applyEndGameState();
+      // Fetch stats to show initial corner (0 solved)
+      if(competitiveMode) fetchAllStats().then(()=>updateCornerScore());
+    }
   }, 600);
 }
 
@@ -778,7 +782,16 @@ function restoreSavedAnswers(){
     if(p && cells[idx]?.includes(p.id)) validate(el, idx, p);
   });
   _restoringAnswers = false;
-  if(competitiveMode) updateCornerScore();
+  // Fetch stats for all cells after restore, then update corner
+  if(competitiveMode){
+    fetchAllStats().then(()=>{
+      solved.forEach((pokemonId, cellIndex)=>{
+        const cel = document.querySelectorAll('.cell')[cellIndex];
+        if(cel) renderCellStats(cel, cellIndex, pokemonId);
+      });
+      updateCornerScore();
+    });
+  }
   applyEndGameState();
 }
 
@@ -927,7 +940,19 @@ function updateCornerScore(){
     const score=computeCellScore(cellIndex,pokemonId);
     total+=score; count++;
   });
-  if(!count){ const cor2=document.querySelector('.corner'); if(cor2&&savedScore&&(savedScore.errors>=3||savedScore.completed)){ cor2.innerHTML=`<div style="text-align:center;padding:4px"><div style="font-size:14px;color:#ef4444;font-weight:700">${savedScore.completed?'✅':'❌'}</div><div style="font-size:9px;margin-top:3px" id="cornerCountdown"></div></div>`; startCountdown(); } return; }
+  if(!count){
+    const cor2=document.querySelector('.corner');
+    if(cor2){
+      if(savedScore&&(savedScore.errors>=3||savedScore.completed)){
+        cor2.innerHTML=`<div style="text-align:center;padding:4px"><div style="font-size:14px;color:#ef4444;font-weight:700">${savedScore.completed?'✅':'❌'}</div><div style="font-size:9px;margin-top:3px" id="cornerCountdown"></div></div>`;
+        startCountdown();
+      } else {
+        // Afficher 0/900 quand aucune case résolue
+        cor2.innerHTML=`<div style="text-align:center;padding:4px"><div style="font-size:22px;font-weight:900;color:#eab308;font-family:'Space Mono',monospace">0</div><div style="font-size:10px;color:var(--muted)">/900</div></div>`;
+      }
+    }
+    return;
+  }
   cor.innerHTML=`<div style="text-align:center;padding:4px"><div style="font-size:22px;font-weight:900;color:#eab308;font-family:'Space Mono',monospace">${total}</div><div style="font-size:10px;color:var(--muted)">/900</div><div style="font-size:10px;color:var(--muted);margin-top:4px" id="cornerCountdown"></div></div>`;
   startCountdown();
 }
