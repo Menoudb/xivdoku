@@ -756,9 +756,14 @@ async function startDailyGrid(){
     const data = await checkDiscordSession();
     if(!data){ competitiveMode=false; return; }
   }
+  // Forcer toutes les générations pour que la grille du jour soit identique pour tous
+  const _savedGens = new Set(selectedGens);
+  selectedGens = new Set([1,2,3,4,5,6,7,8,9]);
+  abilityCategoriesEnabled = false; // jamais de talent en grille du jour
   seedOverride = dailySeed;
   rebuildFilteredData();
   buildPuzzle();
+  selectedGens = _savedGens; // restaurer les gens du joueur après génération de la grille
   setTimeout(()=>{
     if(Object.keys(savedAnswers).length > 0){
       toast(TXT.restoring || 'Restauration de votre partie...');
@@ -847,12 +852,14 @@ async function sendVote(catRow, catCol, pokemonId){
 // ── Sauvegarde compétitive ────────────────────────────────────────
 async function saveCompAnswer(cellIndex, pokemonId, cellScore, errors, completed){
   if(!discordUser || !competitiveMode) return;
+  const ri=Math.floor(cellIndex/3), ci=cellIndex%3;
+  const catRow = rows[ri]?.key || ''; const catCol = cols[ci]?.key || '';
   try {
     const _tok = getToken();
     await fetch(API_URL+'/save_answer.php', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({token:_tok, cell_index:cellIndex, pokemon_id:String(pokemonId), cell_score:cellScore, errors:errors, completed:completed})
+      body:JSON.stringify({token:_tok, cell_index:cellIndex, pokemon_id:String(pokemonId), cell_score:cellScore, errors:errors, completed:completed, cat_row:catRow, cat_col:catCol})
     });
   } catch(e){}
 }
