@@ -854,7 +854,7 @@ async function sendVote(catRow, catCol, pokemonId){
     await fetch(API_URL+'/vote.php', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({cat_row:rKey,cat_col:cKey,pokemon_id:String(pokemonId),session_id:getSessionId(),grid_id:currentGridId})
+      body:JSON.stringify({cat_row:rKey,cat_col:cKey,pokemon_id:String(pokemonId),session_id:getSessionId(),grid_id:currentGridId,token:getToken()||undefined})
     });
   } catch(e){}
 }
