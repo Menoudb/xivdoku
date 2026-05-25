@@ -132,8 +132,8 @@ function uniqueJustifications(arr){
  });
 }
 function selectedPokemonIds(){return new Set(ALL_POKEMON.filter(p=>selectedGens.has(p.gen)).map(p=>p.id));}
-function rawPrevIds(p){const ev=p.rawEvolution||p.evolution||{}; const prev=ev.prev||ev.from; if(!prev)return []; if(Array.isArray(prev)&&prev.length)return [Number(prev[0])].filter(Boolean); return [];}
-function rawNextIds(p){const ev=p.rawEvolution||p.evolution||{}; const next=ev.next||ev.to; if(!next)return []; if(Array.isArray(next))return next.map(x=>Array.isArray(x)?Number(x[0]):Number(x)).filter(Boolean); return [];}
+function rawPrevIds(p){const ev=p.rawEvolution||p.evolution||{}; const prev=ev.prev||ev.from; if(!prev)return []; if(Array.isArray(prev)&&prev.length){const raw=prev[0]; const n=Number(raw); return [isNaN(n)?raw:n].filter(x=>x||x===0);} return [];}
+function rawNextIds(p){const ev=p.rawEvolution||p.evolution||{}; const next=ev.next||ev.to; if(!next)return []; if(Array.isArray(next))return next.map(x=>{const raw=Array.isArray(x)?x[0]:x; const n=Number(raw); return isNaN(n)?raw:n;}).filter(x=>x||x===0); return [];}
 
 function excludedEvolutionInfo(p){
  const selected=selectedPokemonIds();
