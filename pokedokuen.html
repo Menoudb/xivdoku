@@ -208,6 +208,34 @@ function mulberry32(a){return function(){let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>1
 function encodeSharedSeed(){let genMask=0; selectedGens.forEach(g=>{genMask|=(1<<(g-1));});const optBits=genMask|(abilityCategoriesEnabled?1<<9:0)|(unlimitedErrors?1<<10:0);return optBits*1000000000+currentSeed;}function decodeSharedSeed(shared){const s=Math.floor(Math.abs(shared));const seedRaw=s%1000000000;const optBits=Math.floor(s/1000000000);const genMask=optBits&511;const gens=new Set(); for(let g=1;g<=9;g++){if(genMask&(1<<(g-1)))gens.add(g);}const abilOn=!!(optBits&(1<<9));const unlimOn=!!(optBits&(1<<10));return {seedRaw, gens:gens.size?gens:new Set([1,2,3,4,5,6,7,8,9]), abilOn, unlimOn};}function updateSeedDisplay(){const el=document.getElementById('seedDisplay');if(!el)return;const val=String(encodeSharedSeed());const tip=el.querySelector('.copyTip');// preserve the tip span, update only the text node
 let tn=el.firstChild;while(tn&&tn.nodeType!==3)tn=tn.nextSibling;if(tn)tn.nodeValue=val; else el.prepend(document.createTextNode(val));el.onclick=()=>{  navigator.clipboard.writeText(val).then(()=>{    if(tip){tip.textContent=TXT.copied||'Copied!';tip.classList.add('show');}    setTimeout(()=>{if(tip)tip.classList.remove('show');},1000);  }).catch(()=>{});};}
 function shuffle(arr,rng){for(let i=arr.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}return arr;}
+function buildPuzzleFromKeys(rowKeys, colKeys, seed){
+  // Reconstruit la grille depuis les clés fournies par le serveur
+  currentGridId = Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
+  currentSeed = seed || 0;
+  updateSeedDisplay();
+  document.getElementById('winModal')?.classList.remove('open');
+  document.getElementById('loseModal')?.classList.remove('open');
+  document.getElementById('endModal')?.classList.remove('open');
+  // Trouver les objets catégorie correspondant aux clés
+  const catMap = new Map(ALL_CATEGORIES.map(c=>[c.key,c]));
+  rows = rowKeys.map(k=>catMap.get(k)).filter(Boolean);
+  cols = colKeys.map(k=>catMap.get(k)).filter(Boolean);
+  if(rows.length!==3||cols.length!==3){
+    console.error('buildPuzzleFromKeys: clés invalides',rowKeys,colKeys);
+    // Fallback au calcul local
+    seedOverride=currentSeed; buildPuzzle(); return;
+  }
+  // Recalculer les ids gen_ pour inclure les mégas
+  [...rows,...cols].forEach(c=>{
+    if(c.key.startsWith('gen_')){
+      const g=parseInt(c.key.replace('gen_',''));
+      c.ids=ALL_POKEMON.filter(p=>p.gen===g).map(p=>p.id);
+    }
+  });
+  cells = rows.map(r=>cols.map(c=>r.ids.filter(id=>new Set(c.ids).has(id)))).flat();
+  solved.clear(); used.clear(); usedFamilies.clear(); errors=0;
+  renderBoard(); updateErrors();
+}
 function buildPuzzle(){
   currentGridId = Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);if(seedOverride!==null){currentSeed=seedOverride;seedOverride=null;}else{currentSeed=Math.floor(Math.random()*1000000000);}updateSeedDisplay();const r=mulberry32(currentSeed);document.getElementById('winModal')?.classList.remove('open');document.getElementById('loseModal')?.classList.remove('open');document.getElementById('endModal')?.classList.remove('open');const pool=(competitiveMode?ALL_CATEGORIES.filter(c=>{if(c.kind==='ability') return false;const allIds=new Set(ALL_POKEMON.map(p=>p.id));const ids=c.ids.filter(id=>allIds.has(id));return ids.length>=5;}):[...CATEGORIES]); shuffle(pool,r); let best=null;
  for(let attempt=0;attempt<7000;attempt++){const picked=[]; for(const c of shuffle([...pool],r)){if(picked.length>=6)break; if(picked.some(x=>x.key===c.key))continue; if(picked.some(x=>x.kind===c.kind))continue; const typeOf=k=>{if(k.startsWith('type_'))return k.replace('type_','');if(k.startsWith('dual_'))return k.replace('dual_','');if(k.startsWith('dualpair_'))return k.replace('dualpair_','').split('_');return null;}; const ct=typeOf(c.key); if(ct&&picked.some(x=>{const xt=typeOf(x.key);if(!xt)return false;const ca=Array.isArray(ct)?ct:[ct];const xa=Array.isArray(xt)?xt:[xt];return ca.some(t=>xa.includes(t));}))continue; if(c.key.startsWith('ability_')&&picked.some(x=>x.key===c.key))continue; picked.push(c);} if(picked.length<6)continue;
@@ -339,7 +367,7 @@ function wireCell(el,i){const input=el.querySelector('input'), sug=el.querySelec
     }
   }); input.addEventListener('blur',()=>{setTimeout(()=>{sug.style.display="none"},120)});}
 function validate(el,i,p){if(!p) return toast(TXT.empty); if(used.has(p.id)||usedFamilies.has(p.base_family)) return toast(TXT.duplicate); if(cells[i].includes(p.id)){used.add(p.id); usedFamilies.add(p.base_family); solved.set(i,p.id); el.classList.add('solved'); const r=el.querySelector('.result'); r.classList.remove('bad'); r.innerHTML=`<a class="pokemonLinkBlock validatedPokemonLink" href="${pokemonWikiUrl(p)}" target="_blank" rel="noopener noreferrer"><img src="${p.sprite}"><b>${p.name}</b></a><div class="matchDetails">${validMessage(i,p)}</div>`; const _ri=Math.floor(i/3),_ci=i%3; if(!_restoringAnswers){sendVote(rows[_ri],cols[_ci],p.id);optimisticUpdateStats(i,p.id);renderCellPending(el);saveCompAnswer(i,p.id,null,errors,solved.size===9);setTimeout(()=>fetchAllStats().then(()=>{renderCellStats(el,i,p.id);const _score=computeCellScore(i,p.id);if(competitiveMode)updateCornerScore();saveCompAnswer(i,p.id,_score,errors,solved.size===9);if(solved.size===9&&!_restoringAnswers){toast(TXT.win);setTimeout(()=>fetchAllStats().then(()=>{document.querySelectorAll('.cell').forEach((cel,ci)=>{const pid=solved.get(ci);if(pid!==undefined)renderCellStats(cel,ci,pid);});renderCompScore('compScoreWin'); showWin(); if(competitiveMode) updateDailyBadge({completed:1,errors:errors,score_total:Array.from(solved.keys()).reduce((s,ci)=>s+computeCellScore(ci,solved.get(ci)),0),cells_solved:solved.size});}), 800);}}).catch(()=>{}),800);}} else {const r=el.querySelector('.result'); r.style.display='block'; r.classList.add('bad'); let msg=''; try{msg=wrongMessage(p,i)||'';}catch(e){msg='';} msg=String(msg||'').trim(); if(!msg){msg='en'==='fr'?`${p.name} ne correspond pas à cette case.`:`${p.name} does not match this cell.`;} r.innerHTML=msg; r.style.display='block'; r.classList.add('bad');
-  if(competitiveMode && discordUser){ const _tok2=getToken(); const _ri2=Math.floor(i/3),_ci2=i%3; fetch(API_URL+'/save_answer.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:_tok2,cell_index:i,pokemon_id:String(p.id),cell_score:null,errors:errors,completed:false,cat_row:(rows[_ri2]?.key||''),cat_col:(cols[_ci2]?.key||''),wrong:true})}).catch(()=>{}); }
+  if(competitiveMode && discordUser){ const _tok2=getToken(); const _ri2=Math.floor(i/3),_ci2=i%3; fetch(API_URL+'/save_answer.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:_tok2,cell_index:i,pokemon_id:String(p.id),cell_score:null,errors:errors+1,completed:false,cat_row:(rows[_ri2]?.key||''),cat_col:(cols[_ci2]?.key||''),wrong:true})}).catch(()=>{}); }
   addError();}}
 function pokepediaUrl_alias(p){ return pokepediaUrl(p); }
 function wrongMessage(p,i){
@@ -590,10 +618,13 @@ const TOKEN_KEY = 'pdoku_discord_token';
 let competitiveMode = false;
 let discordUser     = null;   // { discord_id, username, avatar_url }
 let dailySeed       = null;
+let dailyGridRows   = null;  // clés lignes fournies par le serveur
+let dailyGridCols   = null;  // clés colonnes fournies par le serveur
 let cellStats       = {};
 let savedScore      = null;
 let currentGridId   = '';
-let savedAnswers    = {};
+let savedAnswers      = {};
+let savedWrongAnswers = {};
 
 // ── Token management ─────────────────────────────────────────────
 function getToken(){ return localStorage.getItem(TOKEN_KEY); }
@@ -650,7 +681,10 @@ async function checkDiscordSession(){
     if(json.ok && json.data.user){
       discordUser  = json.data.user;
       dailySeed    = json.data.seed;
+      dailyGridRows = json.data.grid_rows || null;
+      dailyGridCols = json.data.grid_cols || null;
       savedAnswers = json.data.saved || {};
+      savedWrongAnswers = json.data.wrong_answers || {};
       savedScore   = json.data.current_score || null;
       renderUserBadge();
       if(!competitiveMode && json.data.user_options) loadUserOptions(json.data.user_options);
@@ -788,16 +822,31 @@ function exitCompetitiveMode(){
   if(cor){ cor.innerHTML=`<button id="revealCorner" class="revealCornerBtn" onclick="reveal()">Reveal</button>`; cor.style.position='relative'; cor.style.padding='0'; }
 }
 async function startDailyGrid(){
+  let sessionData = null;
   if(!dailySeed){
-    const data = await checkDiscordSession();
-    if(!data){ competitiveMode=false; return; }
+    sessionData = await checkDiscordSession();
+    if(!sessionData){ competitiveMode=false; return; }
   }
   // Effacer le badge dès l'entrée en mode compétitif
   const _cb=document.getElementById('compBtn'); if(_cb){const _b=_cb.querySelector('.dailyBadge');if(_b)_b.remove();_cb.style.boxShadow='';_cb.style.borderColor='';}
-  const _sg=new Set(selectedGens),_sa=abilityCategoriesEnabled;
-  selectedGens=new Set([1,2,3,4,5,6,7,8,9]); abilityCategoriesEnabled=false; unlimitedErrors=false;
-  seedOverride=dailySeed; rebuildFilteredData(); buildPuzzle();
-  selectedGens=_sg; abilityCategoriesEnabled=_sa;
+  // Utiliser la grille pré-calculée server-side si disponible
+  const srvRows = sessionData?.grid_rows || dailyGridRows;
+  const srvCols = sessionData?.grid_cols || dailyGridCols;
+  if(srvRows && srvCols && srvRows.length===3 && srvCols.length===3){
+    // Grille fournie par le serveur — identique pour tous les joueurs
+    unlimitedErrors=false;
+    const _sg=new Set(selectedGens),_sa=abilityCategoriesEnabled;
+    selectedGens=new Set([1,2,3,4,5,6,7,8,9]); abilityCategoriesEnabled=false;
+    rebuildFilteredData();
+    selectedGens=_sg; abilityCategoriesEnabled=_sa;
+    buildPuzzleFromKeys(srvRows, srvCols, dailySeed);
+  } else {
+    // Fallback: calcul local avec seed (ancien comportement)
+    const _sg=new Set(selectedGens),_sa=abilityCategoriesEnabled;
+    selectedGens=new Set([1,2,3,4,5,6,7,8,9]); abilityCategoriesEnabled=false; unlimitedErrors=false;
+    seedOverride=dailySeed; rebuildFilteredData(); buildPuzzle();
+    selectedGens=_sg; abilityCategoriesEnabled=_sa;
+  }
   if(Object.keys(savedAnswers).length > 0){
     toast(TXT.restoring || 'Restoring your game...');
     setTimeout(()=>restoreSavedAnswers(), 600);
@@ -809,6 +858,7 @@ let _restoringAnswers = false;
 function restoreSavedAnswers(){
   _restoringAnswers = true;
   const cellEls = document.querySelectorAll('.cell');
+  // Restaurer les bonnes réponses
   Object.entries(savedAnswers).forEach(([ci, ans]) => {
     const idx = parseInt(ci);
     const el  = cellEls[idx];
@@ -816,6 +866,30 @@ function restoreSavedAnswers(){
     const p = byId.get(ans.pokemon_id) || byId.get(Number(ans.pokemon_id));
     if(p && cells[idx]?.includes(p.id)) validate(el, idx, p);
   });
+  // Restaurer le compteur d'erreurs (en cours de partie)
+  if(savedScore && savedScore.errors > 0 && !savedScore.completed){
+    errors = savedScore.errors;
+    updateErrors();
+  }
+  // Restaurer les mauvaises réponses (affichage uniquement, sans compter d'erreur)
+  if(savedWrongAnswers && Object.keys(savedWrongAnswers).length > 0){
+    Object.entries(savedWrongAnswers).forEach(([ci, pids]) => {
+      const idx = parseInt(ci);
+      if(solved.has(idx)) return; // case déjà résolue, pas d'affichage erreur
+      const el = cellEls[idx];
+      if(!el) return;
+      // Afficher la dernière mauvaise réponse
+      const lastPid = pids[pids.length - 1];
+      const p = byId.get(lastPid) || byId.get(Number(lastPid));
+      if(!p) return;
+      const r = el.querySelector('.result');
+      if(r){
+        r.innerHTML = `<a class="pokemonLinkBlock" href="${pokemonWikiUrl(p)}" target="_blank" rel="noopener noreferrer"><img src="${p.sprite}"><b>${p.name}</b></a><div class="matchDetails">${wrongMessage(p,idx)}</div>`;
+        r.className = 'result wrong';
+        el.classList.add('wrong');
+      }
+    });
+  }
   _restoringAnswers = false;
   if(competitiveMode){
     fetchAllStats().then(()=>{
@@ -1098,7 +1172,13 @@ async function showComparison(otherId, otherName, otherAvatar){
 // ── Wiring des modals (DOMContentLoaded) ─────────────────────────
 document.addEventListener('DOMContentLoaded', ()=>{
   const leaderOpenBtn = document.getElementById('leaderOpenBtn');
-  if(leaderOpenBtn) leaderOpenBtn.onclick=()=>{ const m=document.getElementById('leaderModal'); if(m){m.style.display='flex';loadLeaderboard(false);} };
+  if(leaderOpenBtn) leaderOpenBtn.onclick=()=>{
+    if(competitiveMode){
+      const finished = savedScore && (savedScore.completed || savedScore.errors >= 3);
+      if(!finished){ toast('You must finish today's grid (win or lose) to view the leaderboard.'); return; }
+    }
+    const m=document.getElementById('leaderModal'); if(m){m.style.display='flex';loadLeaderboard(false);}
+  };
   const leaderDayBtn = document.getElementById('leaderDayBtn');
   const leaderAllBtn = document.getElementById('leaderAllBtn');
   if(leaderDayBtn) leaderDayBtn.onclick=()=>{ leaderDayBtn.classList.add('active'); leaderAllBtn?.classList.remove('active'); loadLeaderboard(false); };
