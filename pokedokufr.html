@@ -848,8 +848,11 @@ async function startDailyGrid(){
     selectedGens=_sg; abilityCategoriesEnabled=_sa;
   }
   setTimeout(()=>{
-    if(Object.keys(savedAnswers).length > 0){
-      toast(TXT.restoring || 'Restauration de votre partie...');
+    const hasAnswers = Object.keys(savedAnswers).length > 0;
+    const hasWrong   = savedWrongAnswers && Object.keys(savedWrongAnswers).length > 0;
+    const hasErrors  = savedScore && savedScore.errors > 0;
+    if(hasAnswers || hasWrong || hasErrors){
+      if(hasAnswers) toast(TXT.restoring || 'Restauration de votre partie...');
       restoreSavedAnswers();
     } else {
       applyEndGameState();
@@ -871,11 +874,7 @@ function restoreSavedAnswers(){
     const p = byId.get(ans.pokemon_id) || byId.get(Number(ans.pokemon_id));
     if(p && cells[idx]?.includes(p.id)) validate(el, idx, p);
   });
-  // Restaurer le compteur d'erreurs (en cours de partie)
-  if(savedScore && savedScore.errors > 0 && !savedScore.completed){
-    errors = savedScore.errors;
-    updateErrors();
-  }
+  // (erreurs restaurées après les bonnes réponses, voir plus bas)
   // Restaurer les mauvaises réponses (affichage uniquement, sans compter d'erreur)
   if(savedWrongAnswers && Object.keys(savedWrongAnswers).length > 0){
     Object.entries(savedWrongAnswers).forEach(([ci, pids]) => {
@@ -896,6 +895,11 @@ function restoreSavedAnswers(){
     });
   }
   _restoringAnswers = false;
+  // Restaurer le compteur d'erreurs après les bonnes réponses
+  if(savedScore && savedScore.errors > 0 && !savedScore.completed){
+    errors = savedScore.errors;
+    updateErrors();
+  }
   if(competitiveMode){
     fetchAllStats().then(()=>{
       solved.forEach((pid2,ci2)=>{ const cel2=document.querySelectorAll('.cell')[ci2]; if(cel2) renderCellStats(cel2,ci2,pid2); });
