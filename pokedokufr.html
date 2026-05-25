@@ -1119,13 +1119,14 @@ async function loadLeaderboard(alltime=false){
     const resp=await fetch(url+sep+'token='+encodeURIComponent(_ltok||''));
     const json=await resp.json();
     if(!json.ok) throw new Error();
+    const canCompare = json.data.can_compare || false;
     const rankings=json.data.rankings;
     if(!rankings.length){ content.innerHTML='<p style="color:#64748b;text-align:center;padding:20px">Aucun joueur encore</p>'; return; }
     content.innerHTML=rankings.map(r=>{
       const rankCls=r.rank===1?'top1':r.rank===2?'top2':r.rank===3?'top3':'';
       const score=alltime?r.total_score:r.score_total;
       const sub=alltime?`${r.days_played} jour${r.days_played>1?'s':''}`:(r.completed?'✅ Terminé':'En cours');
-      const cmpBtn=(!alltime&&!r.is_me&&discordUser)?`<button class="leaderBtn" style="font-size:10px;padding:3px 8px" onclick="showComparison('${r.discord_id}','${r.username}','${r.avatar_url}')">Comparer</button>`:'';
+      const cmpBtn=(!alltime&&!r.is_me&&discordUser&&canCompare)?`<button class="leaderBtn" style="font-size:10px;padding:3px 8px" onclick="showComparison('${r.discord_id}','${r.username}','${r.avatar_url}')">Comparer</button>`:'';
       return `<div class="leaderRow ${r.is_me?'me':''}">
         <span class="leaderRank ${rankCls}">#${r.rank}</span>
         <img class="leaderAvatar" src="${r.avatar_url}" alt="">
@@ -1151,6 +1152,8 @@ async function showComparison(otherId, otherName, otherAvatar){
     const me = d.me, other = d.other;
     const cells = Array(9).fill('').map((_,i)=>{
       const mc = me?.cells[i], oc = other?.cells[i];
+      // N'afficher que les cases validées par au moins un des deux joueurs
+      if(!mc && !oc) return '';
       const mPok = mc ? (byId.get(mc.pokemon_id)||byId.get(Number(mc.pokemon_id))) : null;
       const oPok = oc ? (byId.get(oc.pokemon_id)||byId.get(Number(oc.pokemon_id))) : null;
       const same = mc&&oc&&mc.pokemon_id===oc.pokemon_id;
@@ -1165,7 +1168,7 @@ async function showComparison(otherId, otherName, otherAvatar){
           </div>
         </div>
       </div>`;
-    }).join('');
+    }).filter(Boolean).join('');
     content.innerHTML = `
       <button onclick="loadLeaderboard(false)" style="background:none;border:none;color:#a5b4fc;cursor:pointer;font-size:12px;margin-bottom:12px">← Retour</button>
       <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
